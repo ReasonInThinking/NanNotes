@@ -24,24 +24,35 @@
 Просто скопируйте и выполните эту команду в терминале — она сама найдёт скачанный файл в вашей домашней папке, выдаст права на запуск и создаст ярлык в меню:
 
 ```bash
-APP_PATH=`find ~ -maxdepth 4 -name "NanNotes-x86_64.AppImage" 2>/dev/null | head -n 1`
-APP_DIR=`dirname "$APP_PATH"`
-chmod +x "\$APP_PATH"
+python3 -c '
+import os, glob, subprocess
 
-cat << EOF > ~/.local/share/applications/nannotes.desktop
-[Desktop Entry]
+matches = glob.glob(os.path.expanduser("~/**/NanNotes-x86_64.AppImage"), recursive=True)
+if not matches:
+    print("Файл NanNotes-x86_64.AppImage не найден в домашней папке")
+else:
+    app_path = matches[0]
+    app_dir = os.path.dirname(app_path)
+    os.chmod(app_path, 0o755)
+    desktop_dir = os.path.expanduser("~/.local/share/applications")
+    os.makedirs(desktop_dir, exist_ok=True)
+    desktop_file = os.path.join(desktop_dir, "nannotes.desktop")
+    with open(desktop_file, "w") as f:
+        f.write(f"""[Desktop Entry]
 Type=Application
 Name=NanNotes
 Comment=Быстрые заметки и закладки
-Exec=env GDK_BACKEND=x11 \$APP_PATH
-Icon=\$APP_DIR/logo.png
+Exec=env GDK_BACKEND=x11 {app_path}
+Icon={app_dir}/logo.png
 Categories=Utility;Office;
 Terminal=false
 StartupWMClass=nan_notes
-EOF
-
-update-desktop-database ~/.local/share/applications/
+""")
+    subprocess.run(["update-desktop-database", desktop_dir])
+    print("Ярлык успешно создан для:", app_path)
+'
 ```
+
 
 
 ### 3. Запуск из терминала (опционально) ⌨️
