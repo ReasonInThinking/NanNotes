@@ -43,6 +43,7 @@ EOF
 update-desktop-database ~/.local/share/applications/
 ```
 
+
 ### 3. Запуск из терминала (опционально) ⌨️
 Если вы привыкли запускать программы из консоли, добавьте функцию `nannotes` в ваш `~/.bashrc`. Она сама найдёт `NanNotes-x86_64.AppImage` и запустит его в фоне:
 
