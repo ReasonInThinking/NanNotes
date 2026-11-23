@@ -18,70 +18,72 @@
 
 ### 1. Скачивание файлов ⬇️
 1. Перейдите во вкладку **[Releases](../../releases)** справа и скачайте файл **`NanNotes-x86_64.AppImage`**.
-2. Также сохраните файл **`logo.png`** из корня этого репозитория, если хотите добавить программу в меню приложений со штатной иконкой.
+2. Также сохраните файл **`logo.png`** из корня этого репозитория в ту же папку (например, в `~/Documents/NanNotes`), чтобы подтянулась иконка приложения.
 
-### 2. Добавление в меню приложений Linux 🖥️
-Положите `NanNotes-x86_64.AppImage` и `logo.png` в одну папку (например, в `~/Documents/NanNotes`) и выполните эту команду в терминале:
+### 2. Добавление в меню приложений и запуск из терминала 🖥️
+Просто скопируйте и выполните эту команду в терминале — она сама найдёт скачанные файлы, создаст ярлык в меню приложений и добавит команду `nannotes` для запуска из консоли:
 
 ```bash
 python3 -c '
-import os, glob, subprocess
+import os, glob, shutil, subprocess
 
-matches = glob.glob(os.path.expanduser("~/**/NanNotes-x86_64.AppImage"), recursive=True)
+matches = sorted(glob.glob(os.path.expanduser("~/**/NanNotes-x86_64.AppImage"), recursive=True))
 if not matches:
     print("Файл NanNotes-x86_64.AppImage не найден в домашней папке")
-else:
-    app_path = matches[0]
-    app_dir = os.path.dirname(app_path)
-    os.chmod(app_path, 0o755)
-    desktop_dir = os.path.expanduser("~/.local/share/applications")
-    os.makedirs(desktop_dir, exist_ok=True)
-    desktop_file = os.path.join(desktop_dir, "nannotes.desktop")
-    with open(desktop_file, "w") as f:
-        f.write(f"""[Desktop Entry]
+    exit(1)
+
+app_path = matches.pop(0)
+app_dir = os.path.dirname(app_path)
+os.chmod(app_path, 0o755)
+
+bin_dir = os.path.expanduser("~/.local/bin")
+os.makedirs(bin_dir, exist_ok=True)
+bin_file = os.path.join(bin_dir, "nannotes")
+with open(bin_file, "w") as f:
+    f.write(f"""#!/bin/sh
+nohup env GDK_BACKEND=x11 "{app_path}" >/dev/null 2>&1 &
+""")
+os.chmod(bin_file, 0o755)
+
+icons_dir = os.path.expanduser("~/.local/share/icons")
+os.makedirs(icons_dir, exist_ok=True)
+icon_dest = os.path.join(icons_dir, "nannotes.png")
+logo_src = os.path.join(app_dir, "logo.png")
+if os.path.exists(logo_src):
+    shutil.copy2(logo_src, icon_dest)
+
+desktop_dir = os.path.expanduser("~/.local/share/applications")
+os.makedirs(desktop_dir, exist_ok=True)
+desktop_file = os.path.join(desktop_dir, "nannotes.desktop")
+with open(desktop_file, "w") as f:
+    f.write(f"""[Desktop Entry]
 Type=Application
 Name=NanNotes
 Comment=Быстрые заметки и закладки
-Exec=env GDK_BACKEND=x11 {app_path}
-Icon={app_dir}/logo.png
+Exec={bin_file}
+Icon={icon_dest}
 Categories=Utility;Office;
 Terminal=false
 StartupWMClass=nan_notes
 """)
-    subprocess.run(["update-desktop-database", desktop_dir])
-    print("Ярлык успешно создан для:", app_path)
+os.chmod(desktop_file, 0o755)
+subprocess.run(["update-desktop-database", desktop_dir])
+
+bashrc = os.path.expanduser("~/.bashrc")
+if os.path.exists(bashrc):
+    content = open(bashrc).read()
+    if ".local/bin" not in content:
+        with open(bashrc, "a") as f:
+            f.write("\nexport PATH=\"HOME/.local/bin:PATH\"\n")
+
+print("Готово! Ярлык создан, запуск из терминала: nannotes")
 '
 ```
 
-### 3. Запуск из терминала (опционально) ⌨️
-Добавьте функцию `nannotes` в `~/.bashrc`, чтобы запускать программу из любой директории консоли:
-
-```bash
-python3 -c '
-import os
-p = os.path.expanduser("~/.bashrc")
-content = open(p).read() if os.path.exists(p) else ""
-if "nannotes()" not in content:
-    func = """
-nannotes() {
-  local app
-  app=`find ~ -maxdepth 4 -name "NanNotes-x86_64.AppImage" 2>/dev/null | head -n 1`
-  if [ -n "\$app" ]; then
-    nohup env GDK_BACKEND=x11 "\$app" >/dev/null 2>&1 &
-  else
-    echo "Файл NanNotes-x86_64.AppImage не найден"
-  fi
-}
-"""
-    open(p, "w").write(content.rstrip() + "\n" + func)
-' && source ~/.bashrc
-```
-
-Запуск из терминала:
+После этого программу можно открыть из меню приложений или из любой директории терминала командой:
 ```bash
 nannotes
 ```
-
 
 ---
 
