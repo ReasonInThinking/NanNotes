@@ -1,17 +1,78 @@
-# nan_notes
+# 📝 NanNotes
 
-A new Flutter project.
+Лёгкий, быстрый и визуально выразительный менеджер коротких заметок и закладок для **Linux (x86_64)**, написанный на Flutter. ✨
 
-## Getting Started
+## ✨ Возможности
+- 🎨 **Визуальное разделение контента:** текстовые заметки выполнены в тёплых янтарных тонах, а ссылки — в неоново-голубых с векторными фоновыми иллюстрациями.
+- ⚡ **Мгновенный ввод прямо в главном окне:** переключайтесь между режимами «Заметка» и «Ссылка», выбирайте папку и добавляйте записи по нажатию `Enter`.
+- 🔗 **Ссылки с описанием:** сохраняйте не просто голый URL, а понятное название сайта, статьи или видео вместе с адресом.
+- 📁 **Умные папки с иконками:** создавайте отдельные категории для заметок (фильмы, идеи, книги) и для ссылок (видео, сервисы, статьи).
+- 🖱️ **Действия в один клик:** клик по заметке мгновенно копирует её в буфер обмена, а клик по ссылке открывает её в браузере.
+- 💾 **Локальное и лёгкое хранение:** все записи хранятся в одном аккуратном JSON-файле `~/.nan_notes.json`.
 
-This project is a starting point for a Flutter application.
+---
 
-A few resources to get you started if this is your first Flutter project:
+## 📦 Быстрая установка (Linux x86_64)
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Приложение распространяется в формате автономного **AppImage** и подходит для любых 64-битных дистрибутивов Linux (Ubuntu, Zorin OS, Linux Mint, Debian, Fedora, Arch и др.).
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### 1. Скачивание файлов ⬇️
+1. Перейдите во вкладку **[Releases](../../releases)** справа и скачайте файл **`NanNotes-x86_64.AppImage`**.
+2. Также сохраните файл **`logo.png`** из корня этого репозитория, если хотите добавить программу в меню приложений со штатной иконкой.
+
+### 2. Добавление в меню приложений Linux 🖥️
+Просто скопируйте и выполните эту команду в терминале — она сама найдёт скачанный файл в вашей домашней папке, выдаст права на запуск и создаст ярлык в меню:
+
+```bash
+APP_PATH=`find ~ -maxdepth 4 -name "NanNotes-x86_64.AppImage" 2>/dev/null | head -n 1`
+APP_DIR=`dirname "$APP_PATH"`
+chmod +x "\$APP_PATH"
+
+cat << EOF > ~/.local/share/applications/nannotes.desktop
+[Desktop Entry]
+Type=Application
+Name=NanNotes
+Comment=Быстрые заметки и закладки
+Exec=env GDK_BACKEND=x11 \$APP_PATH
+Icon=\$APP_DIR/logo.png
+Categories=Utility;Office;
+Terminal=false
+StartupWMClass=nan_notes
+EOF
+
+update-desktop-database ~/.local/share/applications/
+```
+
+### 3. Запуск из терминала (опционально) ⌨️
+Если вы привыкли запускать программы из консоли, добавьте функцию `nannotes` в ваш `~/.bashrc`. Она сама найдёт `NanNotes-x86_64.AppImage` и запустит его в фоне:
+
+```bash
+python3 -c '
+import os
+p = os.path.expanduser("~/.bashrc")
+content = open(p).read() if os.path.exists(p) else ""
+if "nannotes()" not in content:
+    func = """
+nannotes() {
+  local app
+  app=`find ~ -maxdepth 4 -name "NanNotes-x86_64.AppImage" 2>/dev/null | head -n 1`
+  if [ -n "\$app" ]; then
+    nohup env GDK_BACKEND=x11 "\$app" >/dev/null 2>&1 &
+  else
+    echo "Файл NanNotes-x86_64.AppImage не найден"
+  fi
+}
+"""
+    open(p, "w").write(content.rstrip() + "\n" + func)
+' && source ~/.bashrc
+```
+
+Теперь программу можно открыть из любой директории терминала просто введя:
+```bash
+nannotes
+```
+
+---
+
+## ⭐ Поддержка проекта
+Если утилита помогла навести порядок в заметках и ссылках — поставьте **звёздочку (Star)** этому репозиторию в правом верхнем углу! 🙌
