@@ -1,104 +1,80 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-void main() {
-  runApp(const NanNotesApp());
-}
+void main() => runApp(const NanNotesApp());
 
-// ==========================================
-// ПАЛИТРА И ИКОНКИ ПРИЛОЖЕНИЯ
-// ==========================================
-class VibeTheme {
-  static const Color bgMain = Color(0xFF0B0E14);
-  static const Color bgSide = Color(0xFF111620);
-  static const Color bgCard = Color(0xFF161C28);
-  static const Color border = Color(0xFF252E3F);
-  static const Color textMain = Color(0xFFF8FAFC);
-  static const Color textMuted = Color(0xFF94A3B8);
+class NotesTheme {
+  static const Color bg = Color(0xFF0C0E12);
+  static const Color panel = Color(0xFF141820);
+  static const Color sidebar = Color(0xFF11141B);
+  static const Color amber = Color(0xFFC99342);
+  static const Color cyan = Color(0xFF4C99BA);
+  static const Color textMain = Color(0xFFCBD5E1);
+  static const Color textDim = Color(0xFF64748B);
 
-  // Тёплый янтарно-оранжевый для заметок
-  static const Color noteColor = Color(0xFFFBBF24);
-  static const Color noteSecondary = Color(0xFFF97316);
-
-  // Неоново-голубой для ссылок
-  static const Color linkColor = Color(0xFF38BDF8);
-  static const Color linkSecondary = Color(0xFF818CF8);
-
-  static const double radius = 18.0;
-
-  static const List<IconData> availableIcons = [
-    Icons.movie_filter_rounded,
-    Icons.lightbulb_rounded,
-    Icons.auto_stories_rounded,
-    Icons.music_note_rounded,
-    Icons.code_rounded,
-    Icons.star_rounded,
-    Icons.rocket_launch_rounded,
-    Icons.bookmark_rounded,
+  static const List<Color> palette = <Color>[
+    Color(0xFF56A888), // Шалфей
+    Color(0xFFC97863), // Терракота
+    Color(0xFF5894BD), // Сизый голубой
+    Color(0xFFB59A4C), // Приглушённая охра
+    Color(0xFF8B7EC8), // Пыльная лаванда
+    Color(0xFF4CA398), // Спокойная бирюза
+    Color(0xFFC26D82), // Пыльный коралл
+    Color(0xFF72A366), // Травяной
+    Color(0xFF6882C4), // Приглушённый василёк
+    Color(0xFFC48B52), // Мягкий янтарь
+    Color(0xFF5C9EB5), // Морская волна
+    Color(0xFFA378B5), // Приглушённая слива
+    Color(0xFF8FA356), // Оливковый
+    Color(0xFFBD6E96), // Пыльная роза
+    Color(0xFF52A675), // Хвойный
+    Color(0xFFBA7C56), // Корица
+    Color(0xFF5A8FB8), // Стальной синий
+    Color(0xFF9EA154), // Горчичный
+    Color(0xFF7A85C2), // Барвинок
+    Color(0xFF4E9E8B), // Нефрит
+    Color(0xFFBF6F73), // Брусничный
+    Color(0xFF6BA18E), // Эвкалипт
+    Color(0xFF967BB0), // Вереск
+    Color(0xFFB88F56), // Песочный
   ];
+
+  static Color colorForFolder(
+      String folder, bool isLink, List<String> allFolders) {
+    if (folder == 'Общее') return isLink ? cyan : amber;
+    final idx = allFolders.indexOf(folder);
+    final safeIdx = idx >= 0 ? idx : folder.length;
+    final offset = isLink ? 7 : 0;
+    return palette[(safeIdx * 3 + offset) % palette.length];
+  }
 }
 
-class NoteCategory {
-  String name;
-  String type; // 'note' или 'link'
-  int iconIndex;
-
-  NoteCategory({
-    required this.name,
-    required this.type,
-    this.iconIndex = 0,
-  });
-
-  IconData get icon => VibeTheme
-      .availableIcons[iconIndex.clamp(0, VibeTheme.availableIcons.length - 1)];
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'type': type,
-        'iconIndex': iconIndex,
-      };
-
-  factory NoteCategory.fromJson(Map<String, dynamic> json) => NoteCategory(
-        name: json['name']?.toString() ?? 'Заметки',
-        type: json['type'] == 'link' ? 'link' : 'note',
-        iconIndex: (json['iconIndex'] is int) ? json['iconIndex'] as int : 0,
-      );
+IconData iconForCategory(String folder, bool isLink) {
+  final f = folder.toLowerCase();
+  if (f.contains('иде')) return Icons.lightbulb_outline_rounded;
+  if (f.contains('фильм') || f.contains('кино')) return Icons.movie_outlined;
+  if (f.contains('книг')) return Icons.auto_stories_outlined;
+  if (f.contains('видео')) return Icons.play_circle_outline_rounded;
+  if (f.contains('сервис')) return Icons.widgets_outlined;
+  if (f.contains('стат')) return Icons.article_outlined;
+  return isLink ? Icons.language_rounded : Icons.sticky_note_2_outlined;
 }
 
-class NoteItem {
-  String id;
-  String type; // 'note' или 'link'
-  String title;
-  String text;
-  String category;
+void playSound(String name) {
+  final file = '/usr/share/sounds/freedesktop/stereo/$name.oga';
+  Process.run('paplay', <String>['--volume=36000', file])
+      .catchError((_) => ProcessResult(0, 0, '', ''));
+}
 
-  NoteItem({
-    required this.id,
-    required this.type,
-    this.title = '',
-    required this.text,
-    required this.category,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'type': type,
-        'title': title,
-        'text': text,
-        'category': category,
-      };
-
-  factory NoteItem.fromJson(Map<String, dynamic> json) => NoteItem(
-        id: json['id']?.toString() ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
-        type: json['type'] == 'link' ? 'link' : 'note',
-        title: json['title']?.toString() ?? '',
-        text: json['text']?.toString() ?? json['content']?.toString() ?? '',
-        category: json['category']?.toString() ?? 'Фильмы',
-      );
+void openUrlInBrowser(String rawUrl) {
+  var url = rawUrl.trim();
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://$url';
+  }
+  Process.run('xdg-open', <String>[url])
+      .catchError((_) => ProcessResult(0, 0, '', ''));
 }
 
 class NanNotesApp extends StatelessWidget {
@@ -106,138 +82,83 @@ class NanNotesApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final baseTheme = ThemeData.dark();
     return MaterialApp(
       title: 'NanNotes',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: VibeTheme.bgMain,
-        cardColor: VibeTheme.bgCard,
-        colorScheme: const ColorScheme.dark(
-          primary: VibeTheme.linkColor,
-          surface: VibeTheme.bgCard,
+      theme: baseTheme.copyWith(
+        scaffoldBackgroundColor: NotesTheme.bg,
+        textTheme: baseTheme.textTheme.apply(
+          fontFamily: 'Inter',
+          fontFamilyFallback: const ['Ubuntu', 'Noto Sans', 'sans-serif'],
+          bodyColor: NotesTheme.textMain,
+          displayColor: NotesTheme.textMain,
         ),
       ),
-      home: const NotesHomeScreen(),
+      home: const NotesScreen(),
     );
   }
 }
 
 
 
-// ==========================================
-// ВЕКТОРНЫЕ ИЛЛЮСТРАЦИИ (SVG-СТИЛЬ)
-// ==========================================
-class CardArtPainter extends CustomPainter {
-  final bool isNote;
-  final Color color;
+class NoteItem {
+  String id;
+  bool isLink;
+  String text;
+  String title;
+  String folder;
 
-  CardArtPainter({required this.isNote, required this.color});
+  NoteItem({
+    required this.id,
+    required this.isLink,
+    required this.text,
+    this.title = '',
+    this.folder = 'Общее',
+  });
 
+  bool get isLong => text.length > 72 || text.contains('\n');
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'isLink': isLink,
+        'text': text,
+        'title': title,
+        'folder': folder,
+      };
+
+  factory NoteItem.fromJson(Map<String, dynamic> json) {
+    return NoteItem(
+      id: json['id']?.toString() ??
+          DateTime.now().microsecondsSinceEpoch.toString(),
+      isLink: json['isLink'] == true || json['type'] == 'link',
+      text: (json['text'] ?? json['url'] ?? json['content'] ?? '').toString(),
+      title: (json['title'] ?? json['desc'] ?? '').toString(),
+      folder: (json['folder'] ?? json['category'] ?? 'Общее').toString(),
+    );
+  }
+}
+
+class BackgroundArtPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final strokePaint = Paint()
-      ..color = color.withOpacity(0.11)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    final fillPaint = Paint()
-      ..color = color.withOpacity(0.05)
-      ..style = PaintingStyle.fill;
-
-    if (isNote) {
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width - 78, size.height - 78, 66, 66),
-        const Radius.circular(14),
-      );
-      canvas.drawRRect(rect, fillPaint);
-      canvas.drawRRect(rect, strokePaint);
-
-      canvas.drawLine(
-        Offset(size.width - 62, size.height - 54),
-        Offset(size.width - 28, size.height - 54),
-        strokePaint,
-      );
-      canvas.drawLine(
-        Offset(size.width - 62, size.height - 40),
-        Offset(size.width - 38, size.height - 40),
-        strokePaint,
-      );
-    } else {
-      final center = Offset(size.width - 36, size.height - 36);
-      canvas.drawCircle(center, 34, fillPaint);
-      canvas.drawCircle(center, 34, strokePaint);
-      canvas.drawOval(
-        Rect.fromCenter(center: center, width: 68, height: 26),
-        strokePaint,
-      );
-      canvas.drawOval(
-        Rect.fromCenter(center: center, width: 26, height: 68),
-        strokePaint,
-      );
+    final dotPaint = Paint()..color = Colors.white.withOpacity(0.03);
+    const step = 36.0;
+    for (double x = 24; x < size.width; x += step) {
+      for (double y = 24; y < size.height; y += step) {
+        canvas.drawCircle(Offset(x, y), 1.0, dotPaint);
+      }
     }
-  }
 
-  @override
-  bool shouldRepaint(covariant CardArtPainter oldDelegate) =>
-      oldDelegate.isNote != isNote || oldDelegate.color != color;
-}
+    final arcPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = Colors.white.withOpacity(0.025);
 
-class EmptyBoardArtPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-
-    final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          VibeTheme.noteColor.withOpacity(0.18),
-          VibeTheme.linkColor.withOpacity(0.10),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: 75));
-    canvas.drawCircle(center, 75, glowPaint);
-
-    // Левая карточка (заметка)
-    canvas.save();
-    canvas.translate(center.dx - 24, center.dy);
-    canvas.rotate(-10 * math.pi / 180);
-    final noteRect = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(-28, -34, 56, 68),
-      const Radius.circular(12),
-    );
-    canvas.drawRRect(
-      noteRect,
-      Paint()..color = VibeTheme.noteColor.withOpacity(0.18),
-    );
-    canvas.drawRRect(
-      noteRect,
-      Paint()
-        ..color = VibeTheme.noteColor.withOpacity(0.6)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    canvas.restore();
-
-    // Правая карточка (ссылка)
-    canvas.save();
-    canvas.translate(center.dx + 24, center.dy + 4);
-    canvas.rotate(10 * math.pi / 180);
-    final linkRect = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(-28, -34, 56, 68),
-      const Radius.circular(12),
-    );
-    canvas.drawRRect(
-      linkRect,
-      Paint()..color = VibeTheme.linkColor.withOpacity(0.18),
-    );
-    canvas.drawRRect(
-      linkRect,
-      Paint()
-        ..color = VibeTheme.linkColor.withOpacity(0.6)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    canvas.restore();
+    final center = Offset(size.width * 0.85, size.height * 0.78);
+    canvas.drawCircle(center, 180, arcPaint);
+    canvas.drawCircle(center, 310, arcPaint);
+    canvas.drawCircle(center, 440, arcPaint);
   }
 
   @override
@@ -246,437 +167,499 @@ class EmptyBoardArtPainter extends CustomPainter {
 
 
 
-class NotesHomeScreen extends StatefulWidget {
-  const NotesHomeScreen({super.key});
+class NotesScreen extends StatefulWidget {
+  const NotesScreen({super.key});
 
   @override
-  State<NotesHomeScreen> createState() => _NotesHomeScreenState();
+  State<NotesScreen> createState() => _NotesScreenState();
 }
 
-class _NotesHomeScreenState extends State<NotesHomeScreen> {
-  List<NoteCategory> _categories = [
-    NoteCategory(name: 'Фильмы', type: 'note', iconIndex: 0),
-    NoteCategory(name: 'Идеи', type: 'note', iconIndex: 1),
-    NoteCategory(name: 'Посмотреть', type: 'link', iconIndex: 6),
-    NoteCategory(name: 'Сайты', type: 'link', iconIndex: 7),
-  ];
+class _NotesScreenState extends State<NotesScreen> {
+  final TextEditingController _mainInput = TextEditingController();
+  final TextEditingController _titleInput = TextEditingController();
 
   List<NoteItem> _items = [];
-  String _selectedCat = 'Все';
-  String _inputType = 'note'; // 'note' или 'link'
-  String _inputCategory = 'Фильмы';
+  List<String> _noteFolders = ['Общее', 'Идеи', 'Фильмы', 'Книги'];
+  List<String> _linkFolders = ['Общее', 'Видео', 'Сервисы', 'Статьи'];
 
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _inputController = TextEditingController();
+  bool _isLinkMode = false;
+  String _selectedFolder = 'Общее';
+  String? _copiedId;
 
-  String get _storagePath {
+  String get _savePath {
     final home = Platform.environment['HOME'] ?? '.';
     return '$home/.nan_notes.json';
+  }
+
+  List<String> get _currentFolders =>
+      _isLinkMode ? _linkFolders : _noteFolders;
+
+  List<NoteItem> get _filteredItems {
+    return _items.where((item) {
+      if (item.isLink != _isLinkMode) return false;
+      if (_selectedFolder != 'Общее' && item.folder != _selectedFolder) {
+        return false;
+      }
+      return true;
+    }).toList();
   }
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _load();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _load() async {
     try {
-      final file = File(_storagePath);
-      if (await file.exists()) {
-        final decoded = jsonDecode(await file.readAsString());
-        if (decoded is Map<String, dynamic>) {
-          final rawCats = decoded['categories'];
-          final rawItems = decoded['items'];
+      final f = File(_savePath);
+      if (await f.exists()) {
+        final raw = jsonDecode(await f.readAsString());
+        if (raw is List) {
           setState(() {
-            if (rawCats is List && rawCats.isNotEmpty) {
-              _categories = rawCats
-                  .whereType<Map<String, dynamic>>()
-                  .map((e) => NoteCategory.fromJson(e))
-                  .toList();
-            }
-            if (rawItems is List) {
-              _items = rawItems
-                  .whereType<Map<String, dynamic>>()
-                  .map((e) => NoteItem.fromJson(e))
-                  .toList();
-            }
-            _syncInputCategory();
+            _items = raw
+                .whereType<Map<String, dynamic>>()
+                .map(NoteItem.fromJson)
+                .toList();
           });
+        } else if (raw is Map<String, dynamic>) {
+          final list = raw['items'] ?? raw['notes'];
+          if (list is List) {
+            setState(() {
+              _items = list
+                  .whereType<Map<String, dynamic>>()
+                  .map(NoteItem.fromJson)
+                  .toList();
+            });
+          }
+          if (raw['noteFolders'] is List) {
+            _noteFolders = List<String>.from(raw['noteFolders'] as List);
+          }
+          if (raw['linkFolders'] is List) {
+            _linkFolders = List<String>.from(raw['linkFolders'] as List);
+          }
         }
       }
     } catch (_) {}
   }
 
-  void _syncInputCategory() {
-    final matching = _categories.where((c) => c.type == _inputType).toList();
-    if (matching.isEmpty) {
-      _inputCategory = _inputType == 'note' ? 'Заметки' : 'Ссылки';
-    } else if (!matching.any((c) => c.name == _inputCategory)) {
-      _inputCategory = matching.first.name;
-    }
-  }
-
-  Future<void> _saveData() async {
+  Future<void> _save() async {
     try {
-      final file = File(_storagePath);
-      final data = {
-        'categories': _categories.map((e) => e.toJson()).toList(),
+      final f = File(_savePath);
+      await f.writeAsString(jsonEncode({
         'items': _items.map((e) => e.toJson()).toList(),
-      };
-      await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data));
+        'noteFolders': _noteFolders,
+        'linkFolders': _linkFolders,
+      }));
     } catch (_) {}
   }
 
-  void _showToast(String msg, Color color) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        width: 300,
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: VibeTheme.bgCard,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: color.withOpacity(0.5)),
-        ),
-        duration: const Duration(milliseconds: 1600),
-        content: Text(
-          msg,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: VibeTheme.textMain, fontSize: 15),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _addQuickItem() async {
-    final mainText = _inputController.text.trim();
-    final titleText = _titleController.text.trim();
-
-    if (_inputType == 'note' && mainText.isEmpty) return;
-    if (_inputType == 'link' && mainText.isEmpty) {
-      _showToast('Введите адрес ссылки', VibeTheme.linkColor);
-      return;
-    }
+  void _addItem() {
+    final text = _mainInput.text.trim();
+    if (text.isEmpty) return;
+    final title = _titleInput.text.trim();
 
     setState(() {
       _items.insert(
         0,
         NoteItem(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
-          type: _inputType,
-          title: _inputType == 'link'
-              ? (titleText.isNotEmpty ? titleText : mainText)
-              : '',
-          text: mainText,
-          category: _inputCategory,
+          isLink: _isLinkMode,
+          text: text,
+          title: _isLinkMode ? title : '',
+          folder: _selectedFolder,
         ),
       );
-      _inputController.clear();
-      _titleController.clear();
+      _mainInput.clear();
+      _titleInput.clear();
     });
-    await _saveData();
+    playSound('message-new-instant');
+    _save();
   }
 
-  Future<void> _openUrl(String rawUrl) async {
-    String url = rawUrl.trim();
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://$url';
-    }
-    await Process.start('xdg-open', [url], mode: ProcessStartMode.detached);
-    _showToast('Открыто в браузере', VibeTheme.linkColor);
-  }
-
-  Future<void> _copyText(String text, Color color) async {
-    await Clipboard.setData(ClipboardData(text: text));
-    _showToast('Скопировано в буфер', color);
+  Future<void> _copyItem(NoteItem item) async {
+    await Clipboard.setData(ClipboardData(text: item.text));
+    playSound('audio-volume-change');
+    setState(() => _copiedId = item.id);
+    Future.delayed(const Duration(milliseconds: 1100), () {
+      if (mounted && _copiedId == item.id) {
+        setState(() => _copiedId = null);
+      }
+    });
   }
 
 
 
+  void _showFullNoteDialog(NoteItem item) {
+    final folders = item.isLink ? _linkFolders : _noteFolders;
+    final accent =
+        NotesTheme.colorForFolder(item.folder, item.isLink, folders);
+    playSound('audio-volume-change');
 
-  Future<void> _createCategoryDialog(String type) async {
-    final controller = TextEditingController();
-    final isNote = type == 'note';
-    final color = isNote ? VibeTheme.noteColor : VibeTheme.linkColor;
-    int pickedIconIndex = isNote ? 0 : 6;
-
-    await showDialog(
+    showDialog<void>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: VibeTheme.bgCard,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(VibeTheme.radius),
-            side: BorderSide(color: color.withOpacity(0.45)),
-          ),
-          title: Row(
-            children: [
-              Icon(VibeTheme.availableIcons[pickedIconIndex], color: color),
-              const SizedBox(width: 10),
-              Text(
-                isNote ? 'Новая папка заметок' : 'Новая папка ссылок',
-                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 360,
+      builder: (ctx) => Dialog(
+        backgroundColor: NotesTheme.panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: accent.withOpacity(0.22), width: 1.0),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 580, maxHeight: 540),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  style: const TextStyle(fontSize: 16),
-                  decoration: InputDecoration(
-                    hintText: isNote
-                        ? 'Например: Фильмы, Цитаты...'
-                        : 'Например: Статьи, Музыка...',
-                    filled: true,
-                    fillColor: VibeTheme.bgMain,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                Row(
+                  children: [
+                    Icon(
+                      iconForCategory(item.folder, item.isLink),
+                      size: 18,
+                      color: accent.withOpacity(0.85),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Text(
+                      item.folder,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
+                        color: accent.withOpacity(0.85),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Копировать текст',
+                      icon: Icon(Icons.copy_rounded,
+                          size: 19, color: accent.withOpacity(0.85)),
+                      onPressed: () {
+                        _copyItem(item);
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    IconButton(
+                      tooltip: 'Закрыть',
+                      icon: const Icon(Icons.close_rounded,
+                          size: 20, color: NotesTheme.textDim),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Выберите иконку:',
-                  style: TextStyle(color: VibeTheme.textMuted, fontSize: 13),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: List.generate(VibeTheme.availableIcons.length, (i) {
-                    final selected = i == pickedIconIndex;
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () => setDialogState(() => pickedIconIndex = i),
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? color.withOpacity(0.2)
-                              : VibeTheme.bgMain,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: selected ? color : VibeTheme.border,
-                            width: selected ? 1.5 : 1,
-                          ),
-                        ),
-                        child: Icon(
-                          VibeTheme.availableIcons[i],
-                          size: 20,
-                          color: selected ? color : VibeTheme.textMuted,
-                        ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      item.text,
+                      style: const TextStyle(
+                        fontSize: 16.5,
+                        height: 1.6,
+                        letterSpacing: 0.2,
+                        fontWeight: FontWeight.w400,
+                        color: NotesTheme.textMain,
                       ),
-                    );
-                  }),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Отмена',
-                style: TextStyle(color: VibeTheme.textMuted, fontSize: 15),
-              ),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.black,
-              ),
-              onPressed: () async {
-                final name = controller.text.trim();
-                if (name.isNotEmpty &&
-                    !_categories.any(
-                        (c) => c.name.toLowerCase() == name.toLowerCase())) {
-                  setState(() {
-                    _categories.add(NoteCategory(
-                      name: name,
-                      type: type,
-                      iconIndex: pickedIconIndex,
-                    ));
-                    _selectedCat = name;
-                    _inputType = type;
-                    _inputCategory = name;
-                  });
-                  await _saveData();
-                }
-                if (mounted) Navigator.pop(context);
-              },
-              child: const Text(
-                'Создать',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-            ),
-          ],
         ),
       ),
     );
+  }
+
+  Future<void> _showAddFolderDialog() async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: NotesTheme.panel,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Новая папка',
+          style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+              color: NotesTheme.textMain),
+        ),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(fontSize: 15.5, color: NotesTheme.textMain),
+          decoration: const InputDecoration(
+            hintText: 'Название папки...',
+            hintStyle: TextStyle(color: NotesTheme.textDim),
+          ),
+          onSubmitted: (val) => Navigator.pop(ctx, val.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена',
+                style: TextStyle(color: NotesTheme.textDim)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: Text(
+              'Создать',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: _isLinkMode ? NotesTheme.cyan : NotesTheme.amber,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (name != null && name.isNotEmpty) {
+      setState(() {
+        final list = _currentFolders;
+        if (!list.contains(name)) list.add(name);
+        _selectedFolder = name;
+      });
+      _save();
+    }
+  }
+
+  void _deleteFolder(String folder) {
+    if (folder == 'Общее') return;
+    setState(() {
+      for (final item in _items) {
+        if (item.isLink == _isLinkMode && item.folder == folder) {
+          item.folder = 'Общее';
+        }
+      }
+      _currentFolders.remove(folder);
+      if (_selectedFolder == folder) {
+        _selectedFolder = 'Общее';
+      }
+    });
+    playSound('audio-volume-change');
+    _save();
   }
 
 
 
 
   Widget _buildSidebar() {
-    final noteCats = _categories.where((c) => c.type == 'note').toList();
-    final linkCats = _categories.where((c) => c.type == 'link').toList();
+    final notesCount = _items.where((e) => !e.isLink).length;
+    final linksCount = _items.where((e) => e.isLink).length;
+
+    Widget modeButton({
+      required bool linkTab,
+      required String label,
+      required int count,
+      required IconData icon,
+    }) {
+      final active = _isLinkMode == linkTab;
+      final tabColor = linkTab ? NotesTheme.cyan : NotesTheme.amber;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (_isLinkMode == linkTab) return;
+            setState(() {
+              _isLinkMode = linkTab;
+              _selectedFolder = 'Общее';
+            });
+            playSound('audio-volume-change');
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: active ? tabColor.withOpacity(0.14) : Colors.transparent,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(
+                color: active ? tabColor.withOpacity(0.32) : Colors.transparent,
+                width: 1.0,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: active ? tabColor.withOpacity(0.9) : NotesTheme.textDim,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$label · $count',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    letterSpacing: 0.2,
+                    fontWeight: active ? FontWeight.w500 : FontWeight.w400,
+                    color: active ? NotesTheme.textMain : NotesTheme.textDim,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Container(
-      width: 245,
-      decoration: const BoxDecoration(
-        color: VibeTheme.bgSide,
-        border: Border(right: BorderSide(color: VibeTheme.border)),
+      width: 224,
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 16),
+      decoration: BoxDecoration(
+        color: NotesTheme.sidebar,
+        border: Border(
+          right: BorderSide(
+            color: Colors.white.withOpacity(0.05),
+            width: 1.0,
+          ),
+        ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 22),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Градиентный логотип
-          Padding(
-            padding: const EdgeInsets.only(left: 8, bottom: 22),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [VibeTheme.noteColor, VibeTheme.linkColor],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome_mosaic_rounded,
-                    color: Colors.black,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'NanNotes',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: VibeTheme.textMain,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          _navItem(
-            title: 'Все записи',
-            icon: Icons.grid_view_rounded,
-            color: VibeTheme.textMain,
-            isSelected: _selectedCat == 'Все',
-            onTap: () => setState(() => _selectedCat = 'Все'),
-          ),
-
-          const SizedBox(height: 22),
-
-          Expanded(
-            child: ListView(
-              children: [
-                // СЕКЦИЯ ЗАМЕТОК
-                _sectionTitle(
-                  'ЗАМЕТКИ',
-                  VibeTheme.noteColor,
-                  () => _createCategoryDialog('note'),
-                ),
-                const SizedBox(height: 6),
-                ...noteCats.map((cat) => _navItem(
-                      title: cat.name,
-                      icon: cat.icon,
-                      color: VibeTheme.noteColor,
-                      isSelected: _selectedCat == cat.name,
-                      onTap: () => setState(() {
-                        _selectedCat = cat.name;
-                        _inputType = 'note';
-                        _inputCategory = cat.name;
-                      }),
-                      onDelete: () async {
-                        setState(() {
-                          _categories.remove(cat);
-                          if (_selectedCat == cat.name) _selectedCat = 'Все';
-                          _syncInputCategory();
-                        });
-                        await _saveData();
-                      },
-                    )),
-
-                const SizedBox(height: 22),
-
-                // СЕКЦИЯ ССЫЛОК
-                _sectionTitle(
-                  'ССЫЛКИ',
-                  VibeTheme.linkColor,
-                  () => _createCategoryDialog('link'),
-                ),
-                const SizedBox(height: 6),
-                ...linkCats.map((cat) => _navItem(
-                      title: cat.name,
-                      icon: cat.icon,
-                      color: VibeTheme.linkColor,
-                      isSelected: _selectedCat == cat.name,
-                      onTap: () => setState(() {
-                        _selectedCat = cat.name;
-                        _inputType = 'link';
-                        _inputCategory = cat.name;
-                      }),
-                      onDelete: () async {
-                        setState(() {
-                          _categories.remove(cat);
-                          if (_selectedCat == cat.name) _selectedCat = 'Все';
-                          _syncInputCategory();
-                        });
-                        await _saveData();
-                      },
-                    )),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String text, Color color, VoidCallback onAdd) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.1,
-              color: color,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: NotesTheme.panel,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                modeButton(
+                  linkTab: false,
+                  label: 'Заметки',
+                  count: notesCount,
+                  icon: Icons.notes_rounded,
+                ),
+                const SizedBox(width: 4),
+                modeButton(
+                  linkTab: true,
+                  label: 'Ссылки',
+                  count: linksCount,
+                  icon: Icons.link_rounded,
+                ),
+              ],
             ),
           ),
-          const Spacer(),
-          InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: onAdd,
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(Icons.add_rounded, size: 20, color: color),
+          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              children: [
+                Text(
+                  'КАТЕГОРИИ',
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.w500,
+                    color: NotesTheme.textDim.withOpacity(0.8),
+                  ),
+                ),
+                const Spacer(),
+                InkWell(
+                  onTap: _showAddFolderDialog,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.add_rounded,
+                      size: 18,
+                      color: NotesTheme.textMain.withOpacity(0.8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.separated(
+              itemCount: _currentFolders.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 4),
+              itemBuilder: (_, idx) {
+                final folder = _currentFolders[idx];
+                final selected = _selectedFolder == folder;
+                final fColor = NotesTheme.colorForFolder(
+                    folder, _isLinkMode, _currentFolders);
+                final canDelete = folder != 'Общее';
+                final itemCount = _items
+                    .where((e) =>
+                        e.isLink == _isLinkMode &&
+                        (folder == 'Общее' || e.folder == folder))
+                    .length;
+
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    setState(() => _selectedFolder = folder);
+                    playSound('audio-volume-change');
+                  },
+                  onSecondaryTap:
+                      canDelete ? () => _deleteFolder(folder) : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 11, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? fColor.withOpacity(0.14)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selected
+                            ? fColor.withOpacity(0.32)
+                            : Colors.transparent,
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          iconForCategory(folder, _isLinkMode),
+                          size: 16,
+                          color: fColor.withOpacity(0.85),
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            folder,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              letterSpacing: 0.2,
+                              fontWeight:
+                                  selected ? FontWeight.w500 : FontWeight.w400,
+                              color: selected
+                                  ? fColor.withOpacity(0.95)
+                                  : NotesTheme.textMain.withOpacity(0.82),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        if (selected && canDelete)
+                          GestureDetector(
+                            onTap: () => _deleteFolder(folder),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 15,
+                              color: fColor.withOpacity(0.8),
+                            ),
+                          )
+                        else
+                          Text(
+                            '$itemCount',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: NotesTheme.textDim.withOpacity(0.75),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -684,578 +667,312 @@ class _NotesHomeScreenState extends State<NotesHomeScreen> {
     );
   }
 
-  Widget _navItem({
-    required String title,
-    required IconData icon,
-    required Color color,
-    required bool isSelected,
-    required VoidCallback onTap,
-    VoidCallback? onDelete,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
+
+
+  Widget _buildInputBar() {
+    final accent = NotesTheme.colorForFolder(
+        _selectedFolder, _isLinkMode, _currentFolders);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+      decoration: BoxDecoration(
+        color: NotesTheme.panel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: accent.withOpacity(0.16),
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_isLinkMode) ...[
+            TextField(
+              controller: _titleInput,
+              textInputAction: TextInputAction.next,
+              style: const TextStyle(
+                fontSize: 15.5,
+                letterSpacing: 0.2,
+                fontWeight: FontWeight.w400,
+                color: NotesTheme.textMain,
+              ),
+              decoration: const InputDecoration(
+                hintText: 'Описание ссылки...',
+                hintStyle: TextStyle(color: NotesTheme.textDim),
+                border: InputBorder.none,
+                isDense: true,
+              ),
+            ),
+            Divider(height: 14, color: Colors.white.withOpacity(0.05)),
+          ],
+          Row(
             children: [
-              Icon(icon, size: 19, color: isSelected ? color : VibeTheme.textMuted),
-              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                child: TextField(
+                  controller: _mainInput,
+                  minLines: 1,
+                  maxLines: _isLinkMode ? 1 : 4,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addItem(),
+                  style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? VibeTheme.textMain : VibeTheme.textMuted,
+                    height: 1.45,
+                    letterSpacing: 0.2,
+                    fontWeight: FontWeight.w400,
+                    color: NotesTheme.textMain,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: _isLinkMode
+                        ? 'Вставьте ссылку в «$_selectedFolder»...'
+                        : 'Новая заметка в «$_selectedFolder» (Enter — сохранить)...',
+                    hintStyle: const TextStyle(color: NotesTheme.textDim),
+                    border: InputBorder.none,
+                    isDense: true,
                   ),
                 ),
               ),
-              if (isSelected && onDelete != null)
-                InkWell(
-                  onTap: onDelete,
-                  child: const Icon(Icons.close, size: 16, color: Colors.redAccent),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Сохранить',
+                onPressed: _addItem,
+                icon: Icon(
+                  Icons.arrow_upward_rounded,
+                  color: accent.withOpacity(0.85),
+                  size: 23,
                 ),
+              ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+
+
+  Widget _buildFlexCard(NoteItem item, double tileWidth) {
+    final folders = item.isLink ? _linkFolders : _noteFolders;
+    final accent =
+        NotesTheme.colorForFolder(item.folder, item.isLink, folders);
+    final canExpand = !item.isLink && item.isLong;
+    final isCopied = _copiedId == item.id;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        if (item.isLink) {
+          openUrlInBrowser(item.text);
+        } else if (canExpand) {
+          _showFullNoteDialog(item);
+        } else {
+          _copyItem(item);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: tileWidth,
+        height: 148,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isCopied ? accent.withOpacity(0.12) : NotesTheme.panel,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isCopied
+                ? accent.withOpacity(0.45)
+                : accent.withOpacity(0.18),
+            width: 1.0,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  iconForCategory(item.folder, item.isLink),
+                  size: 15,
+                  color: accent.withOpacity(0.85),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    isCopied ? 'Скопировано' : item.folder,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      letterSpacing: 0.2,
+                      fontWeight: FontWeight.w500,
+                      color: accent.withOpacity(0.85),
+                    ),
+                  ),
+                ),
+                if (canExpand)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.open_in_full_rounded,
+                      size: 14,
+                      color: accent.withOpacity(0.75),
+                    ),
+                  ),
+                IconButton(
+                  tooltip: 'Копировать',
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(4),
+                  icon: Icon(
+                    isCopied ? Icons.check_rounded : Icons.copy_rounded,
+                    size: 16,
+                    color: isCopied
+                        ? accent.withOpacity(0.9)
+                        : NotesTheme.textDim.withOpacity(0.75),
+                  ),
+                  onPressed: () => _copyItem(item),
+                ),
+                IconButton(
+                  tooltip: 'Удалить',
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(4),
+                  icon: Icon(
+                    Icons.close_rounded,
+                    size: 17,
+                    color: NotesTheme.textDim.withOpacity(0.55),
+                  ),
+                  onPressed: () {
+                    setState(() => _items.remove(item));
+                    _save();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (item.isLink) ...[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      item.title.isNotEmpty ? item.title : item.text,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        height: 1.4,
+                        letterSpacing: 0.15,
+                        fontWeight: FontWeight.w500,
+                        color: NotesTheme.textMain.withOpacity(0.92),
+                      ),
+                    ),
+                    if (item.title.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        item.text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          letterSpacing: 0.15,
+                          fontWeight: FontWeight.w400,
+                          color: accent.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ] else ...[
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    item.text,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      height: 1.45,
+                      letterSpacing: 0.15,
+                      fontWeight: FontWeight.w400,
+                      color: NotesTheme.textMain.withOpacity(0.92),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
-
 
 
 
   @override
   Widget build(BuildContext context) {
-    final visibleItems = _selectedCat == 'Все'
-        ? _items
-        : _items.where((i) => i.category == _selectedCat).toList();
-
-    final isNoteMode = _inputType == 'note';
-    final activeColor = isNoteMode ? VibeTheme.noteColor : VibeTheme.linkColor;
-    final secondaryColor =
-        isNoteMode ? VibeTheme.noteSecondary : VibeTheme.linkSecondary;
-
-    final matchingCats = _categories.where((c) => c.type == _inputType).toList();
-    final dropdownItems = matchingCats.isNotEmpty
-        ? matchingCats.map((c) => c.name).toList()
-        : [isNoteMode ? 'Заметки' : 'Ссылки'];
-    final safeCategory = dropdownItems.contains(_inputCategory)
-        ? _inputCategory
-        : dropdownItems.first;
+    final visibleItems = _filteredItems;
 
     return Scaffold(
-      body: Row(
-        children: [
-          _buildSidebar(),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _selectedCat == 'Все' ? 'Все записи' : _selectedCat,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: VibeTheme.textMain,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // ПАНЕЛЬ БЫСТРОГО ВВОДА С ГРАДИЕНТНОЙ ПОДСВЕТКОЙ
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: VibeTheme.bgCard,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: activeColor.withOpacity(0.45),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: activeColor.withOpacity(0.08),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            // Переключатель типа: Заметка / Ссылка
-                            Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                color: VibeTheme.bgMain,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  _typeSwitchBtn(
-                                    label: 'Заметка',
-                                    icon: Icons.edit_note_rounded,
-                                    color: VibeTheme.noteColor,
-                                    active: isNoteMode,
-                                    onTap: () => setState(() {
-                                      _inputType = 'note';
-                                      _syncInputCategory();
-                                    }),
-                                  ),
-                                  _typeSwitchBtn(
-                                    label: 'Ссылка',
-                                    icon: Icons.link_rounded,
-                                    color: VibeTheme.linkColor,
-                                    active: !isNoteMode,
-                                    onTap: () => setState(() {
-                                      _inputType = 'link';
-                                      _syncInputCategory();
-                                    }),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-
-                            // Выбор категории прямо при создании
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(
-                                color: VibeTheme.bgMain,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: activeColor.withOpacity(0.35),
-                                ),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: safeCategory,
-                                  dropdownColor: VibeTheme.bgCard,
-                                  icon: Icon(Icons.keyboard_arrow_down_rounded,
-                                      color: activeColor),
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: activeColor,
-                                  ),
-                                  items: dropdownItems
-                                      .map((cat) => DropdownMenuItem(
-                                            value: cat,
-                                            child: Text(cat),
-                                          ))
-                                      .toList(),
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() => _inputCategory = val);
-                                    }
-                                  },
-                                ),
-                              ),
-                            ),
-                            const Spacer(),
-
-                            // Градиентная кнопка добавления
-                            InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: _addQuickItem,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 22,
-                                  vertical: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [activeColor, secondaryColor],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  'Добавить',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black,
+      body: CustomPaint(
+        painter: BackgroundArtPainter(),
+        child: SafeArea(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSidebar(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildInputBar(),
+                      const SizedBox(height: 18),
+                      Expanded(
+                        child: visibleItems.isEmpty
+                            ? Center(
+                                child: Text(
+                                  _isLinkMode
+                                      ? 'В этой папке пока нет ссылок'
+                                      : 'В этой папке пока нет заметок',
+                                  style: const TextStyle(
+                                    fontSize: 15.5,
+                                    letterSpacing: 0.2,
+                                    fontWeight: FontWeight.w400,
+                                    color: NotesTheme.textDim,
                                   ),
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
+                              )
+                            : LayoutBuilder(
+                                builder: (context, constraints) {
+                                  const spacing = 14.0;
+                                  final fullWidth = constraints.maxWidth;
+                                  final cols =
+                                      (fullWidth / 250).floor().clamp(1, 5);
+                                  final tileWidth =
+                                      (fullWidth - spacing * (cols - 1)) / cols;
 
-
-                        const SizedBox(height: 10),
-                        const Divider(height: 1, color: VibeTheme.border),
-                        const SizedBox(height: 8),
-
-                        // Поля ввода (1 поле для заметки, 2 поля для ссылки)
-                        if (isNoteMode)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: TextField(
-                              controller: _inputController,
-                              onSubmitted: (_) => _addQuickItem(),
-                              style: const TextStyle(
-                                fontSize: 17,
-                                color: VibeTheme.textMain,
-                              ),
-                              decoration: const InputDecoration(
-                                hintText: 'Черкануть заметку или название фильма...',
-                                hintStyle: TextStyle(
-                                  fontSize: 16,
-                                  color: VibeTheme.textMuted,
-                                ),
-                                border: InputBorder.none,
-                                isDense: true,
-                              ),
-                            ),
-                          )
-                        else
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  flex: 2,
-                                  child: TextField(
-                                    controller: _titleController,
-                                    onSubmitted: (_) => _addQuickItem(),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                      color: VibeTheme.textMain,
+                                  return SingleChildScrollView(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Wrap(
+                                      spacing: spacing,
+                                      runSpacing: spacing,
+                                      children: visibleItems
+                                          .map((item) =>
+                                              _buildFlexCard(item, tileWidth))
+                                          .toList(),
                                     ),
-                                    decoration: const InputDecoration(
-                                      hintText: 'Описание / название ссылки...',
-                                      hintStyle: TextStyle(
-                                        fontSize: 15,
-                                        color: VibeTheme.textMuted,
-                                      ),
-                                      border: InputBorder.none,
-                                      isDense: true,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  width: 1,
-                                  height: 24,
-                                  color: VibeTheme.border,
-                                  margin: const EdgeInsets.symmetric(horizontal: 12),
-                                ),
-                                Expanded(
-                                  flex: 3,
-                                  child: TextField(
-                                    controller: _inputController,
-                                    onSubmitted: (_) => _addQuickItem(),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      color: VibeTheme.linkColor,
-                                    ),
-                                    decoration: const InputDecoration(
-                                      hintText: 'Вставьте URL (https://...)',
-                                      hintStyle: TextStyle(
-                                        fontSize: 15,
-                                        color: VibeTheme.textMuted,
-                                      ),
-                                      border: InputBorder.none,
-                                      isDense: true,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-
-
-                  // СПИСОК КАРТОЧЕК С ВЕКТОРНЫМ ФОНОМ
-                  Expanded(
-                    child: visibleItems.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CustomPaint(
-                                  size: const Size(150, 120),
-                                  painter: EmptyBoardArtPainter(),
-                                ),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'Здесь пока чисто',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: VibeTheme.textMain,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                const Text(
-                                  'Черканите короткую заметку или сохраните ссылку в панели сверху',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: VibeTheme.textMuted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : GridView.builder(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 360,
-                              mainAxisExtent: 165,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                            ),
-                            itemCount: visibleItems.length,
-                            itemBuilder: (context, index) {
-                              final item = visibleItems[index];
-                              final isNote = item.type == 'note';
-                              final color = isNote
-                                  ? VibeTheme.noteColor
-                                  : VibeTheme.linkColor;
-
-                              final catObj = _categories.firstWhere(
-                                (c) => c.name == item.category,
-                                orElse: () => NoteCategory(
-                                  name: item.category,
-                                  type: item.type,
-                                  iconIndex: isNote ? 0 : 6,
-                                ),
-                              );
-
-                              return InkWell(
-                                borderRadius:
-                                    BorderRadius.circular(VibeTheme.radius),
-                                onTap: () {
-                                  if (isNote) {
-                                    _copyText(item.text, color);
-                                  } else {
-                                    _openUrl(item.text);
-                                  }
+                                  );
                                 },
-                                child: ClipRRect(
-                                  borderRadius:
-                                      BorderRadius.circular(VibeTheme.radius),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: VibeTheme.bgCard,
-                                      borderRadius: BorderRadius.circular(
-                                          VibeTheme.radius),
-                                      border: Border.all(
-                                        color: color.withOpacity(0.32),
-                                        width: 1.3,
-                                      ),
-                                    ),
-                                    child: CustomPaint(
-                                      painter: CardArtPainter(
-                                        isNote: isNote,
-                                        color: color,
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(18),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            // Верхняя строка: иконка и название папки + кнопки
-                                            Row(
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 5,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        color.withOpacity(0.15),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      Icon(catObj.icon,
-                                                          size: 15,
-                                                          color: color),
-                                                      const SizedBox(width: 6),
-                                                      Text(
-                                                        item.category,
-                                                        style: TextStyle(
-                                                          fontSize: 13,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: color,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const Spacer(),
-
-
-                                                if (!isNote)
-                                                  IconButton(
-                                                    tooltip:
-                                                        'Копировать ссылку',
-                                                    constraints:
-                                                        const BoxConstraints(),
-                                                    padding:
-                                                        const EdgeInsets.all(4),
-                                                    icon: const Icon(
-                                                      Icons.copy_rounded,
-                                                      size: 18,
-                                                      color:
-                                                          VibeTheme.textMuted,
-                                                    ),
-                                                    onPressed: () => _copyText(
-                                                        item.text, color),
-                                                  ),
-                                                const SizedBox(width: 4),
-                                                IconButton(
-                                                  tooltip: 'Удалить',
-                                                  constraints:
-                                                      const BoxConstraints(),
-                                                  padding:
-                                                      const EdgeInsets.all(4),
-                                                  icon: const Icon(
-                                                    Icons.close_rounded,
-                                                    size: 19,
-                                                    color: VibeTheme.textMuted,
-                                                  ),
-                                                  onPressed: () async {
-                                                    setState(() =>
-                                                        _items.remove(item));
-                                                    await _saveData();
-                                                  },
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 12),
-
-                                            // Содержимое карточки
-                                            if (isNote)
-                                              Expanded(
-                                                child: Text(
-                                                  item.text,
-                                                  maxLines: 3,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 17,
-                                                    height: 1.35,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: VibeTheme.textMain,
-                                                  ),
-                                                ),
-                                              )
-                                            else ...[
-                                              Text(
-                                                item.title,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  fontSize: 17,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: VibeTheme.textMain,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons
-                                                        .open_in_new_rounded,
-                                                    size: 15,
-                                                    color: color,
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Expanded(
-                                                    child: Text(
-                                                      item.text,
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        fontSize: 14,
-                                                        color: color,
-                                                        decoration:
-                                                            TextDecoration
-                                                                .underline,
-                                                        decorationColor: color
-                                                            .withOpacity(0.5),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                              ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _typeSwitchBtn({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? color.withOpacity(0.18) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 19, color: active ? color : VibeTheme.textMuted),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: active ? FontWeight.bold : FontWeight.normal,
-                color: active ? color : VibeTheme.textMuted,
-              ),
-            ),
-          ],
         ),
       ),
     );
